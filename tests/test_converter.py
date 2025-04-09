@@ -4,6 +4,15 @@ import os
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 
+# Use the same try/except pattern for SCTP import
+try:
+    from scapy.contrib.sctp import SCTP
+except ImportError:
+    # Create a dummy SCTP class for testing
+    class SCTP:
+        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
+        pass
+
 from pcap2packetdrill.converter import PcapConverter
 
 
