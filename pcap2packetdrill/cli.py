@@ -13,11 +13,18 @@ import click
 
 from pcap2packetdrill import __version__
 from pcap2packetdrill.converter import PcapConverter
+from pcap2packetdrill.replay_generator import ReplayTestGenerator
 from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS
 
 
-@click.command()
+@click.group()
 @click.version_option(version=__version__)
+def cli():
+    """PCAP2Packetdrill - Convert PCAP files to Packetdrill test scripts."""
+    pass
+
+
+@cli.command(name="convert")
 @click.argument("pcap_file", type=click.Path(exists=True))
 @click.option(
     "-o",
@@ -73,7 +80,7 @@ from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS
     default=False,
     help="Enable debug output",
 )
-def main(
+def convert(
     pcap_file: str,
     output: Optional[str],
     protocol: Optional[str],
@@ -162,6 +169,81 @@ def main(
             import traceback
             traceback.print_exc()
         return 1
+
+
+@cli.command(name="replay")
+@click.argument("pcap_file", type=click.Path(exists=True))
+@click.option(
+    "--output-dir",
+    default="./replay_tests",
+    help="Output directory for generated replay test scripts",
+)
+@click.option(
+    "--template-dir",
+    help="Directory containing custom templates for replay tests",
+)
+@click.option(
+    "--relative-time/--absolute-time",
+    default=True,
+    help="Use relative timestamps (default: True)",
+)
+@click.option(
+    "--debug/--no-debug",
+    default=False,
+    help="Enable debug output",
+)
+def replay(
+    pcap_file: str,
+    output_dir: str,
+    template_dir: Optional[str],
+    relative_time: bool,
+    debug: bool,
+) -> int:
+    """
+    Generate replay test scripts from complete TCP/SCTP connections in a PCAP file.
+
+    This command analyzes a PCAP file to identify complete TCP connection cycles and
+    SCTP association cycles, then generates separate test scripts for each cycle.
+    Each generated test is a self-contained Packetdrill script that can be used to
+    reproduce the exact network behavior observed in the original capture.
+
+    PCAP_FILE: Path to the input PCAP file
+    """
+    try:
+        if debug:
+            click.echo(f"Processing {pcap_file} for replay tests...")
+
+        # Create generator instance
+        generator = ReplayTestGenerator(
+            pcap_file=pcap_file,
+            output_dir=output_dir,
+            template_dir=template_dir,
+            relative_time=relative_time,
+            debug=debug,
+        )
+
+        # Generate replay tests
+        click.echo("Generating replay test scripts for complete connection cycles...")
+        test_scripts = generator.generate_replay_tests()
+        
+        if not test_scripts:
+            click.echo("No complete connection cycles found in the PCAP file.")
+        else:
+            click.echo(f"Successfully generated {len(test_scripts)} replay test scripts in {output_dir}.")
+        
+        return 0
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        if debug:
+            import traceback
+            traceback.print_exc()
+        return 1
+
+
+def main():
+    """Main entry point for the CLI."""
+    return cli()
 
 
 if __name__ == "__main__":
