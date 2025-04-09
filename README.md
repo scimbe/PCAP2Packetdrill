@@ -1,5 +1,7 @@
 # PCAP2Packetdrill
 
+[![Python Tests](https://github.com/scimbe/PCAP2Packetdrill/actions/workflows/python-test.yml/badge.svg)](https://github.com/scimbe/PCAP2Packetdrill/actions/workflows/python-test.yml)
+
 A tool for converting PCAP (packet capture) files into Packetdrill test scripts for UDP, TCP, and SCTP protocols.
 
 ## Overview
@@ -87,13 +89,7 @@ pytest
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Please make sure your code follows the project's coding standards and includes appropriate tests.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on how to contribute to this project.
 
 ## License
 
