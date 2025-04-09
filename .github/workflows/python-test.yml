@@ -26,6 +26,8 @@ jobs:
         python -m pip install pytest pytest-cov
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install -e ".[dev]"
+        # Ensure scapy has required SCTP module
+        pip install scapy>=2.5.0
     
     - name: Test with pytest
       run: |
