@@ -3,7 +3,17 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from scapy.all import Ether, IP, TCP, UDP, SCTP, Raw
+from scapy.all import Ether, IP, TCP, UDP, Raw
+
+# Use the same try/except pattern for SCTP import
+try:
+    from scapy.contrib.sctp import SCTP
+except ImportError:
+    # Create a dummy SCTP class for testing
+    class SCTP:
+        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
+        pass
+
 from pcap2packetdrill.protocols import TCPHandler, UDPHandler, SCTPHandler
 
 
@@ -148,6 +158,96 @@ class TestUDPHandler(unittest.TestCase):
         self.assertEqual(client_port, 12345)
         self.assertEqual(server_ip, "192.168.1.2")
         self.assertEqual(server_port, 53)
+
+
+class TestSCTPHandler(unittest.TestCase):
+    """Test the SCTP protocol handler."""
+
+    def setUp(self):
+        """Set up the test case."""
+        self.handler = SCTPHandler()
+        
+    @patch('pcap2packetdrill.protocols.SCTP')
+    def test_extract_packet_info_with_mock(self, mock_sctp):
+        """Test extracting information from a mock SCTP packet."""
+        # Create a mock SCTP packet
+        mock_packet = Mock()
+        mock_packet.__contains__ = lambda x: x in [IP, SCTP]
+        
+        mock_ip = Mock()
+        mock_ip.src = "192.168.1.1"
+        mock_ip.dst = "192.168.1.2"
+        
+        mock_sctp_layer = Mock()
+        mock_sctp_layer.sport = 12345
+        mock_sctp_layer.dport = 8080
+        mock_sctp_layer.tag = 123456
+        mock_sctp_layer.chunks = [
+            {"type": 1, "init_tag": 123456}  # INIT chunk
+        ]
+        
+        mock_packet.__getitem__ = lambda self, protocol: {
+            IP: mock_ip,
+            SCTP: mock_sctp_layer
+        }[protocol]
+        
+        mock_packet.time = 1.0
+        
+        # Test with mock packet
+        info = self.handler.extract_packet_info(mock_packet)
+        
+        # Verify the extracted information
+        self.assertIsNotNone(info)
+        self.assertEqual(info["src_ip"], "192.168.1.1")
+        self.assertEqual(info["dst_ip"], "192.168.1.2")
+        self.assertEqual(info["src_port"], 12345)
+        self.assertEqual(info["dst_port"], 8080)
+        self.assertEqual(info["tag"], 123456)
+        
+    def test_format_packet(self):
+        """Test formatting an SCTP packet as a packetdrill command."""
+        info = {
+            "timestamp": 1.0,
+            "src_ip": "192.168.1.1",
+            "dst_ip": "192.168.1.2",
+            "src_port": 12345,
+            "dst_port": 8080,
+            "tag": 123456,
+            "chunks": [
+                {"type": 1, "init_tag": 987654, "a_rwnd": 65536, "out_streams": 10, "in_streams": 5, "init_tsn": 1000}
+            ],
+        }
+        
+        formatted = self.handler.format_packet(info)
+        
+        self.assertIn("1.000000", formatted)
+        self.assertIn("192.168.1.1:12345 -->", formatted)
+        self.assertIn("192.168.1.2:8080", formatted)
+        self.assertIn("sctp tag 123456", formatted)
+        self.assertIn("INIT", formatted)
+        
+    def test_identify_endpoints(self):
+        """Test identifying client and server endpoints for SCTP."""
+        # Mock packet info with INIT chunk
+        packets_info = [{
+            "timestamp": 1.0,
+            "src_ip": "192.168.1.1",
+            "dst_ip": "192.168.1.2",
+            "src_port": 12345,
+            "dst_port": 8080,
+            "tag": 123456,
+            "chunks": [
+                {"type": 1}  # INIT chunk
+            ],
+        }]
+        
+        with patch.object(SCTPHandler, '_format_sctp_chunks', return_value="INIT[...]"):
+            client_ip, client_port, server_ip, server_port = self.handler.identify_endpoints(packets_info)
+            
+            self.assertEqual(client_ip, "192.168.1.1")
+            self.assertEqual(client_port, 12345)
+            self.assertEqual(server_ip, "192.168.1.2")
+            self.assertEqual(server_port, 8080)
 
 
 if __name__ == "__main__":
