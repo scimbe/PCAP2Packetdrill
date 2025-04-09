@@ -7,7 +7,7 @@ This module provides the command-line interface for the PCAP2Packetdrill tool.
 
 import os
 import sys
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import click
 
@@ -23,13 +23,13 @@ from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS
     "-o",
     "--output",
     default=None,
-    help="Output file for the generated packetdrill script",
+    help="Output file for the generated packetdrill script. If --auto-analyze is used, this is treated as a base name.",
 )
 @click.option(
     "-p",
     "--protocol",
     type=click.Choice(list(SUPPORTED_PROTOCOLS.keys()), case_sensitive=False),
-    help="Protocol to filter (default: auto-detect)",
+    help="Protocol to filter (default: auto-detect). Ignored if --auto-analyze is used.",
 )
 @click.option(
     "--client-ip",
@@ -59,6 +59,16 @@ from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS
     help="Custom Jinja2 template file for output formatting",
 )
 @click.option(
+    "--auto-analyze",
+    is_flag=True,
+    help="Automatically analyze PCAP and generate test scripts for all detected protocols",
+)
+@click.option(
+    "--output-dir",
+    default=".",
+    help="Output directory for generated scripts when using --auto-analyze",
+)
+@click.option(
     "--debug/--no-debug",
     default=False,
     help="Enable debug output",
@@ -73,21 +83,21 @@ def main(
     server_port: Optional[int],
     relative_time: bool,
     template: Optional[str],
+    auto_analyze: bool,
+    output_dir: str,
     debug: bool,
 ) -> int:
     """
-    Convert a PCAP file to a Packetdrill test script.
+    Convert a PCAP file to Packetdrill test scripts.
+
+    Analyzes the structure of a PCAP file and generates Packetdrill test scripts
+    for TCP, UDP, and SCTP protocols with appropriate pre- and post-conditions.
 
     PCAP_FILE: Path to the input PCAP file
     """
     try:
         if debug:
             click.echo(f"Processing {pcap_file}...")
-
-        # Determine output file name if not specified
-        if output is None:
-            base_name = os.path.splitext(os.path.basename(pcap_file))[0]
-            output = f"{base_name}.pkt"
 
         # Create converter instance
         converter = PcapConverter(
@@ -102,16 +112,47 @@ def main(
             debug=debug,
         )
 
-        # Convert PCAP to packetdrill
-        script = converter.convert()
-
-        # Write to output file or stdout
-        if output == "-":
-            click.echo(script)
+        # Check if we should auto-analyze the PCAP
+        if auto_analyze:
+            click.echo("Auto-analyzing PCAP file and generating test scripts for all detected protocols...")
+            
+            # Convert PCAP to multiple packetdrill scripts
+            scripts = converter.convert()
+            
+            # Ensure output directory exists
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Determine base name for output
+            if output:
+                base_name = os.path.splitext(output)[0]
+            else:
+                base_name = os.path.splitext(os.path.basename(pcap_file))[0]
+            
+            # Write scripts to separate files
+            for proto, script in scripts.items():
+                output_file = os.path.join(output_dir, f"{base_name}_{proto}.pkt")
+                with open(output_file, "w") as f:
+                    f.write(script)
+                click.echo(f"Generated {proto} packetdrill script: {output_file}")
+            
+            click.echo(f"Generated {len(scripts)} test scripts successfully.")
         else:
-            with open(output, "w") as f:
-                f.write(script)
-            click.echo(f"Generated packetdrill script: {output}")
+            # Using the original single-protocol conversion
+            # Determine output file name if not specified
+            if output is None:
+                base_name = os.path.splitext(os.path.basename(pcap_file))[0]
+                output = f"{base_name}.pkt"
+            
+            # Convert PCAP to a single packetdrill script
+            script = converter.convert_single()
+            
+            # Write to output file or stdout
+            if output == "-":
+                click.echo(script)
+            else:
+                with open(output, "w") as f:
+                    f.write(script)
+                click.echo(f"Generated packetdrill script: {output}")
 
         return 0
 
