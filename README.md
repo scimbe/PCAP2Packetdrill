@@ -16,6 +16,7 @@ PCAP2Packetdrill helps network engineers and developers convert packet captures 
 ## Features
 
 - Convert PCAP files to Packetdrill test scripts
+- Generate replay tests for complete TCP/SCTP connections
 - Support for multiple protocols (TCP, UDP, SCTP)
 - Automatic flow analysis and test case generation
 - Automatic detection of pre- and post-conditions
@@ -47,18 +48,31 @@ pip install -e .
 
 ## Usage
 
-### Basic Usage
+PCAP2Packetdrill provides two main commands:
+
+```bash
+# Show available commands
+pcap2packetdrill --help
+
+# Convert a PCAP file to a test script
+pcap2packetdrill convert [OPTIONS] PCAP_FILE
+
+# Generate replay test scripts from complete connections
+pcap2packetdrill replay [OPTIONS] PCAP_FILE
+```
+
+### Basic Conversion
 
 Convert a PCAP file to a single Packetdrill script:
 
 ```bash
-pcap2packetdrill input.pcap -o output_script.pkt
+pcap2packetdrill convert input.pcap -o output_script.pkt
 ```
 
 Specify a protocol:
 
 ```bash
-pcap2packetdrill input.pcap -p tcp -o tcp_test.pkt
+pcap2packetdrill convert input.pcap -p tcp -o tcp_test.pkt
 ```
 
 ### Automatic Analysis Mode
@@ -66,7 +80,7 @@ pcap2packetdrill input.pcap -p tcp -o tcp_test.pkt
 Analyze a PCAP file and generate test scripts for all detected protocols:
 
 ```bash
-pcap2packetdrill input.pcap --auto-analyze
+pcap2packetdrill convert input.pcap --auto-analyze
 ```
 
 This will:
@@ -76,10 +90,24 @@ This will:
 4. Determine appropriate pre- and post-conditions
 5. Generate separate test scripts for each protocol
 
+### Replay Test Generation
+
+Generate a separate test script for each complete TCP connection and SCTP association:
+
+```bash
+pcap2packetdrill replay capture.pcap
+```
+
+This will:
+1. Identify complete TCP connections (SYN → Data → FIN)
+2. Identify complete SCTP associations (INIT → Data → SHUTDOWN)
+3. Generate a separate, self-contained test script for each connection
+4. Save them to the output directory with descriptive names
+
 Specify an output directory:
 
 ```bash
-pcap2packetdrill input.pcap --auto-analyze --output-dir ./test_scripts
+pcap2packetdrill replay capture.pcap --output-dir ./replay_tests
 ```
 
 ### Complete Options
@@ -87,10 +115,11 @@ pcap2packetdrill input.pcap --auto-analyze --output-dir ./test_scripts
 For all available options:
 
 ```bash
-pcap2packetdrill --help
+pcap2packetdrill convert --help
+pcap2packetdrill replay --help
 ```
 
-Key options include:
+Key options for conversion include:
 - `--auto-analyze`: Automatically analyze the PCAP and generate tests for all protocols
 - `--client-ip`, `--server-ip`: Specify endpoints (auto-detected by default)
 - `--client-port`, `--server-port`: Specify ports (auto-detected by default)
@@ -99,20 +128,29 @@ Key options include:
 - `--output-dir`: Output directory for auto-analysis mode
 - `--debug`: Show detailed logs during conversion
 
+Key options for replay test generation:
+- `--output-dir`: Directory to save generated test scripts
+- `--template-dir`: Directory containing custom templates
+- `--relative-time/--absolute-time`: Use relative or absolute timestamps
+- `--debug`: Show detailed logs during test generation
+
 ## Examples
 
-See the [examples](./examples) directory for sample PCAP files and corresponding Packetdrill scripts.
+See the [examples](./examples) directory for sample PCAP files, corresponding Packetdrill scripts, and documentation:
 
-### Example: Automatic Analysis
+- [Auto Analysis Example](./examples/auto_analysis_example.md) - Learn how to use the auto-analysis feature
+- [Replay Test Example](./examples/replay_test_example.md) - Learn how to generate replay tests for complete connections
+
+### Example: Replay Test Generation
 
 ```bash
-# Analyze a PCAP file and generate tests for all protocols
-pcap2packetdrill capture.pcap --auto-analyze --output-dir ./tests
+# Generate replay tests for all complete connections in a PCAP file
+pcap2packetdrill replay capture.pcap --output-dir ./replay_tests
 
 # This may generate:
-# - ./tests/capture_tcp.pkt
-# - ./tests/capture_udp.pkt
-# - ./tests/capture_sctp.pkt
+# - ./replay_tests/tcp_192_168_1_2_43210_to_192_168_1_1_80_cycle_1.pkt
+# - ./replay_tests/tcp_192_168_1_2_43211_to_192_168_1_1_80_cycle_1.pkt
+# - ./replay_tests/sctp_192_168_1_2_38745_to_192_168_1_1_8080_cycle_1.pkt
 ```
 
 ## Development
