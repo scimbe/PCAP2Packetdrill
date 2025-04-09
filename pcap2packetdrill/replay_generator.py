@@ -17,7 +17,15 @@ from pathlib import Path
 import jinja2
 from scapy.all import Packet, rdpcap, PcapReader
 from scapy.layers.inet import IP, TCP, UDP
-from scapy.contrib.sctp import SCTP
+
+# Try to import SCTP, but provide a fallback if not available
+try:
+    from scapy.contrib.sctp import SCTP
+except ImportError:
+    # Create a dummy SCTP class for type checking
+    class SCTP:
+        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
+        pass
 
 from pcap2packetdrill.flow_analyzer import FlowAnalyzer
 from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS
