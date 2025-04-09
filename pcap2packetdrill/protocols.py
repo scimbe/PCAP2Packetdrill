@@ -10,7 +10,15 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from scapy.all import Packet
 from scapy.layers.inet import IP, TCP, UDP
-from scapy.contrib.sctp import SCTP
+
+# Try to import SCTP, but provide a fallback if not available
+try:
+    from scapy.contrib.sctp import SCTP
+except ImportError:
+    # Create a dummy SCTP class for type checking
+    class SCTP:
+        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
+        pass
 
 
 class ProtocolHandler(ABC):
