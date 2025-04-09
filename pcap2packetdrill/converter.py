@@ -12,7 +12,15 @@ from collections import defaultdict
 import jinja2
 from scapy.all import rdpcap, Packet
 from scapy.layers.inet import IP, TCP, UDP
-from scapy.contrib.sctp import SCTP
+
+# Try to import SCTP, but provide a fallback if not available
+try:
+    from scapy.contrib.sctp import SCTP
+except ImportError:
+    # Create a dummy SCTP class for type checking
+    class SCTP:
+        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
+        pass
 
 from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS, ProtocolHandler
 
@@ -323,17 +331,18 @@ class PcapConverter:
         for packet in packets:
             if SCTP in packet:
                 # Check SCTP chunks
-                for chunk in packet[SCTP].chunks:
-                    chunk_type = getattr(chunk, "type", None)
-                    
-                    if chunk_type == 1:  # INIT
-                        has_init = True
-                    elif chunk_type == 2:  # INIT_ACK
-                        has_init_ack = True
-                    elif chunk_type == 10:  # COOKIE_ECHO
-                        has_cookie_echo = True
-                    elif chunk_type == 11:  # COOKIE_ACK
-                        has_cookie_ack = True
+                if hasattr(packet[SCTP], "chunks"):
+                    for chunk in packet[SCTP].chunks:
+                        chunk_type = getattr(chunk, "type", None)
+                        
+                        if chunk_type == 1:  # INIT
+                            has_init = True
+                        elif chunk_type == 2:  # INIT_ACK
+                            has_init_ack = True
+                        elif chunk_type == 10:  # COOKIE_ECHO
+                            has_cookie_echo = True
+                        elif chunk_type == 11:  # COOKIE_ACK
+                            has_cookie_ack = True
         
         # Consider an association setup if it has at least INIT and INIT_ACK
         return has_init and has_init_ack
