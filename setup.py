@@ -27,7 +27,7 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        "scapy>=2.4.5",
+        "scapy>=2.5.0",
         "click>=8.0.0",
         "jinja2>=3.0.0",
     ],
