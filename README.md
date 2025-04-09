@@ -46,6 +46,14 @@ cd PCAP2Packetdrill
 pip install -e .
 ```
 
+### SCTP Support
+
+PCAP2Packetdrill supports SCTP protocol analysis, but requires Scapy version 2.5.0 or higher for full SCTP support. The tool includes fallback mechanisms to handle cases where the SCTP module is not available, but for complete SCTP functionality, we recommend:
+
+```bash
+pip install scapy>=2.5.0
+```
+
 ## Usage
 
 PCAP2Packetdrill provides two main commands:
