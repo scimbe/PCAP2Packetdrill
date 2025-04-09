@@ -17,6 +17,8 @@ PCAP2Packetdrill helps network engineers and developers convert packet captures 
 
 - Convert PCAP files to Packetdrill test scripts
 - Support for multiple protocols (TCP, UDP, SCTP)
+- Automatic flow analysis and test case generation
+- Automatic detection of pre- and post-conditions
 - Filter packets based on connection/flow
 - Configurable timestamp handling
 - Automatic identification of client/server roles
@@ -45,27 +47,73 @@ pip install -e .
 
 ## Usage
 
-Basic usage:
+### Basic Usage
+
+Convert a PCAP file to a single Packetdrill script:
 
 ```bash
 pcap2packetdrill input.pcap -o output_script.pkt
 ```
 
-Specifying a protocol:
+Specify a protocol:
 
 ```bash
 pcap2packetdrill input.pcap -p tcp -o tcp_test.pkt
 ```
 
-For more options:
+### Automatic Analysis Mode
+
+Analyze a PCAP file and generate test scripts for all detected protocols:
+
+```bash
+pcap2packetdrill input.pcap --auto-analyze
+```
+
+This will:
+1. Analyze the PCAP file structure
+2. Identify all protocols present (TCP, UDP, SCTP)
+3. Find significant flows for each protocol
+4. Determine appropriate pre- and post-conditions
+5. Generate separate test scripts for each protocol
+
+Specify an output directory:
+
+```bash
+pcap2packetdrill input.pcap --auto-analyze --output-dir ./test_scripts
+```
+
+### Complete Options
+
+For all available options:
 
 ```bash
 pcap2packetdrill --help
 ```
 
+Key options include:
+- `--auto-analyze`: Automatically analyze the PCAP and generate tests for all protocols
+- `--client-ip`, `--server-ip`: Specify endpoints (auto-detected by default)
+- `--client-port`, `--server-port`: Specify ports (auto-detected by default)
+- `--relative-time/--absolute-time`: Use relative or absolute timestamps
+- `--template`: Use a custom template
+- `--output-dir`: Output directory for auto-analysis mode
+- `--debug`: Show detailed logs during conversion
+
 ## Examples
 
 See the [examples](./examples) directory for sample PCAP files and corresponding Packetdrill scripts.
+
+### Example: Automatic Analysis
+
+```bash
+# Analyze a PCAP file and generate tests for all protocols
+pcap2packetdrill capture.pcap --auto-analyze --output-dir ./tests
+
+# This may generate:
+# - ./tests/capture_tcp.pkt
+# - ./tests/capture_udp.pkt
+# - ./tests/capture_sctp.pkt
+```
 
 ## Development
 
