@@ -3,6 +3,7 @@
 import os
 import unittest
 from unittest.mock import Mock, patch, MagicMock
+from scapy.layers.inet import IP, TCP
 
 # Use the same try/except pattern for SCTP import
 try:
