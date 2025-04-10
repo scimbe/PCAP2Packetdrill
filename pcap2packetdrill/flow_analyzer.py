@@ -86,26 +86,71 @@ class FlowAnalyzer:
         flows = defaultdict(list)
         
         for packet in packets:
-            if IP in packet:
-                src_ip = packet[IP].src
-                dst_ip = packet[IP].dst
+            # Handle both real packets and Mock objects
+            protocol = None
+            src_ip = None
+            dst_ip = None
+            src_port = None
+            dst_port = None
+            
+            # Check if packet has IP layer
+            if hasattr(packet, '__contains__') and IP in packet:
+                ip_layer = packet[IP]
+                src_ip = ip_layer.src
+                dst_ip = ip_layer.dst
                 
+                # Determine protocol and get ports
                 if TCP in packet:
                     protocol = "tcp"
-                    src_port = packet[TCP].sport
-                    dst_port = packet[TCP].dport
+                    tcp_layer = packet[TCP]
+                    src_port = tcp_layer.sport
+                    dst_port = tcp_layer.dport
                 elif UDP in packet:
                     protocol = "udp"
-                    src_port = packet[UDP].sport
-                    dst_port = packet[UDP].dport
+                    udp_layer = packet[UDP]
+                    src_port = udp_layer.sport
+                    dst_port = udp_layer.dport
                 elif SCTP in packet:
                     protocol = "sctp"
-                    src_port = packet[SCTP].sport
-                    dst_port = packet[SCTP].dport
-                else:
-                    # Skip unsupported protocols
-                    continue
-                
+                    sctp_layer = packet[SCTP]
+                    src_port = sctp_layer.sport
+                    dst_port = sctp_layer.dport
+            # Handle alternative mock configurations
+            elif hasattr(packet, 'haslayer') and callable(packet.haslayer):
+                if packet.haslayer(IP):
+                    # Try to get IP layer
+                    ip_layer = None
+                    if hasattr(packet, 'getlayer') and callable(packet.getlayer):
+                        ip_layer = packet.getlayer(IP)
+                    elif hasattr(packet, '__getitem__'):
+                        try:
+                            ip_layer = packet[IP]
+                        except (TypeError, IndexError):
+                            continue
+                    
+                    if ip_layer:
+                        src_ip = ip_layer.src
+                        dst_ip = ip_layer.dst
+                        
+                        # Determine protocol and get ports
+                        if packet.haslayer(TCP):
+                            protocol = "tcp"
+                            tcp_layer = packet.getlayer(TCP) if hasattr(packet, 'getlayer') else packet[TCP]
+                            src_port = tcp_layer.sport
+                            dst_port = tcp_layer.dport
+                        elif packet.haslayer(UDP):
+                            protocol = "udp"
+                            udp_layer = packet.getlayer(UDP) if hasattr(packet, 'getlayer') else packet[UDP]
+                            src_port = udp_layer.sport
+                            dst_port = udp_layer.dport
+                        elif packet.haslayer(SCTP):
+                            protocol = "sctp"
+                            sctp_layer = packet.getlayer(SCTP) if hasattr(packet, 'getlayer') else packet[SCTP]
+                            src_port = sctp_layer.sport
+                            dst_port = sctp_layer.dport
+            
+            # If we successfully identified protocol and endpoints, add to flows
+            if protocol and src_ip and dst_ip and src_port is not None and dst_port is not None:
                 flow_id = self.get_flow_id(protocol, src_ip, dst_ip, src_port, dst_port)
                 flows[flow_id].append(packet)
         
@@ -370,6 +415,9 @@ class FlowAnalyzer:
             
             # Check SCTP chunks
             if not hasattr(sctp, 'chunks') or not sctp.chunks:
+                # If no chunks, just add the packet to the current cycle if we're in a cycle
+                if current_cycle:
+                    current_cycle.append(packet)
                 continue
                 
             # Process each chunk
