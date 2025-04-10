@@ -18,7 +18,7 @@ import click
 
 from pcap2packetdrill import __version__
 from pcap2packetdrill.converter import PcapConverter
-from pcap2packetdrill.replay_generator import ReplayTestGenerator
+from pcap2packetdrill.generator import ReplayManager
 from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS
 
 
@@ -341,9 +341,9 @@ def replay(
         elif not os.path.isdir(output_dir):
             raise click.BadParameter(f"Output path '{output_dir}' exists but is not a directory.")
 
-        # Create generator instance
+        # Create replay manager instance
         try:
-            generator = ReplayTestGenerator(
+            manager = ReplayManager(
                 pcap_file=pcap_file,
                 output_dir=output_dir,
                 template_dir=template_dir,
@@ -351,13 +351,13 @@ def replay(
                 debug=debug,
             )
         except Exception as e:
-            raise click.ClickException(f"Error initializing replay generator: {e}")
+            raise click.ClickException(f"Error initializing replay manager: {e}")
 
         # Generate replay tests
         click.echo("Generating replay test scripts for complete connection cycles...")
         
         try:
-            test_scripts = generator.generate_replay_tests()
+            test_scripts = manager.generate_replay_tests()
         except FileNotFoundError as e:
             raise click.FileError(str(e), hint="Make sure the file exists and is accessible.")
         except ValueError as e:
