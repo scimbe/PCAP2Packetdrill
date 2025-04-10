@@ -20,7 +20,7 @@ try:
 except ImportError:
     # Create a dummy SCTP class for testing
     class SCTP:
-        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
+        """Dummy SCTP class for testing"""
         pass
 
 from pcap2packetdrill.replay_generator import ReplayTestGenerator

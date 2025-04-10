@@ -24,7 +24,7 @@ try:
 except ImportError:
     # Create a dummy SCTP class for type checking
     class SCTP:
-        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
+        """Dummy SCTP class for type checking when scapy.contrib.sctp is not available."""
         pass
 
 from pcap2packetdrill.flow_analyzer import FlowAnalyzer
