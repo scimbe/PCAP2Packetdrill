@@ -1,4 +1,4 @@
-# PCAP2Packetdrill
+# PCAP2Packetdrill (Work in Progress)
 
 [![Python Tests](https://github.com/scimbe/PCAP2Packetdrill/actions/workflows/python-test.yml/badge.svg)](https://github.com/scimbe/PCAP2Packetdrill/actions/workflows/python-test.yml)
 
