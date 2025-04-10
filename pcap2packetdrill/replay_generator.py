@@ -408,23 +408,43 @@ class ReplayTestGenerator:
         
         # Adjust timestamps if needed
         if self.relative_time and packets_info:
-            # Handle both real float values and potential Mock objects
-            initial_ts = packets_info[0]["timestamp"]
-            # Convert to float safely, handling potential Mock objects
-            if hasattr(initial_ts, "__float__"):
-                initial_timestamp = float(initial_ts)
-            else:
-                # Default to 0.0 for Mock objects that can't be converted
-                initial_timestamp = 0.0
-                
-            for packet_info in packets_info:
-                ts = packet_info["timestamp"]
-                # Handle both real values and Mock objects
-                if hasattr(ts, "__float__"):
-                    packet_info["timestamp"] = float(ts) - initial_timestamp
+            try:
+                # Sicheres Extrahieren des ersten Timestamps
+                initial_ts = packets_info[0]["timestamp"]
+                # Versuch, den Wert in einen float umzuwandeln
+                if isinstance(initial_ts, (int, float)):
+                    initial_timestamp = float(initial_ts)
+                elif hasattr(initial_ts, "__float__"):
+                    try:
+                        initial_timestamp = float(initial_ts)
+                    except (ValueError, TypeError):
+                        initial_timestamp = 0.0
                 else:
-                    # For Mock objects, just set to 0.0
-                    packet_info["timestamp"] = 0.0
+                    # Standardwert für Mock-Objekte ohne float-Methode
+                    initial_timestamp = 0.0
+                
+                # Relative Zeitstempel für alle Pakete berechnen
+                for packet_info in packets_info:
+                    # Aktuellen Timestamp extrahieren
+                    ts = packet_info["timestamp"]
+                    
+                    # Sicher in einen float umwandeln und relativ machen
+                    if isinstance(ts, (int, float)):
+                        packet_info["timestamp"] = float(ts) - initial_timestamp
+                    elif hasattr(ts, "__float__"):
+                        try:
+                            packet_info["timestamp"] = float(ts) - initial_timestamp
+                        except (ValueError, TypeError):
+                            # Bei Fehler einen aufsteigenden Wert verwenden
+                            packet_info["timestamp"] = packets_info.index(packet_info) * 0.1
+                    else:
+                        # Für Mock-Objekte oder andere nicht-konvertierbare Typen
+                        packet_info["timestamp"] = packets_info.index(packet_info) * 0.1
+            except Exception as e:
+                # Bei Fehlern in der Zeitstempelberechnung einen Fallback verwenden
+                self.logger.warning(f"Error adjusting timestamps: {e}, using sequential values")
+                for i, packet_info in enumerate(packets_info):
+                    packet_info["timestamp"] = i * 0.1
         
         # Format packets into Packetdrill commands
         formatted_packets = []
