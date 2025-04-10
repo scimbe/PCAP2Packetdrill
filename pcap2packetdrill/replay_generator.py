@@ -410,7 +410,7 @@ class ReplayTestGenerator:
         if self.relative_time and packets_info:
             initial_timestamp = packets_info[0]["timestamp"]
             for packet_info in packets_info:
-                packet_info["timestamp"] -= initial_timestamp
+                packet_info["timestamp"] -= float(initial_timestamp)
         
         # Format packets into Packetdrill commands
         formatted_packets = []
