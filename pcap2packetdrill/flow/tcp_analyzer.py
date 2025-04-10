@@ -261,3 +261,36 @@ class TCPAnalyzer:
                 cycles.append(current_cycle)
         
         return cycles
+    
+    def _analyze_tcp_flow(self, packets: List[Packet]) -> bool:
+        """
+        Analyze a TCP flow to determine if it's a complete connection.
+        
+        Args:
+            packets: List of packets in the flow
+            
+        Returns:
+            True if the flow contains a complete TCP connection
+        """
+        has_syn = False
+        has_syn_ack = False
+        has_fin = False
+        
+        for packet in packets:
+            if TCP in packet:
+                flags = packet[TCP].flags
+                
+                # Check for SYN flag (connection initiation)
+                if flags & 0x02:  # SYN flag
+                    has_syn = True
+                
+                # Check for SYN-ACK (connection establishment)
+                if (flags & 0x12) == 0x12:  # SYN and ACK flags
+                    has_syn_ack = True
+                
+                # Check for FIN flag (connection termination)
+                if flags & 0x01:  # FIN flag
+                    has_fin = True
+        
+        # Consider a connection complete if it has at least SYN and SYN-ACK
+        return has_syn and has_syn_ack
