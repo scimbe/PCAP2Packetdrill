@@ -14,7 +14,7 @@ except ImportError:
         pass
 
 from pcap2packetdrill.converter import PcapConverter
-from pcap2packetdrill.protocols import TCPHandler
+from pcap2packetdrill.protocols.tcp_handler import TCPHandler
 
 
 class TestPcapConverter(unittest.TestCase):
@@ -55,7 +55,21 @@ class TestPcapConverter(unittest.TestCase):
     def test_convert_basic(self, mock_jinja, mock_rdpcap):
         """Test basic conversion flow."""
         # Set up mocks
-        mock_rdpcap.return_value = [Mock()]
+        mock_packet = Mock()
+        # Configure mock packet for TCP in packet checks
+        mock_packet.__contains__ = Mock(side_effect=lambda cls: cls in [IP, TCP])
+        mock_ip = Mock()
+        mock_ip.src = "192.168.1.1"
+        mock_ip.dst = "192.168.1.2"
+        mock_tcp = Mock()
+        mock_tcp.sport = 12345
+        mock_tcp.dport = 80
+        mock_tcp.flags = 0x02  # SYN flag
+        mock_packet.__getitem__ = Mock(side_effect=lambda cls: 
+            mock_ip if cls == IP else mock_tcp if cls == TCP else None)
+        mock_packet.time = 1.0
+        
+        mock_rdpcap.return_value = [mock_packet]
         
         # Mock template and rendering
         mock_template = Mock()
@@ -105,6 +119,11 @@ class TestPcapConverter(unittest.TestCase):
             {"timestamp": 13.0},
         ]
         
+        # Make deep copies of the packet info for testing
+        original_packets = []
+        for packet in packets_info:
+            original_packets.append(packet.copy())
+        
         adjusted = converter._adjust_timestamps(packets_info)
         
         self.assertEqual(adjusted[0]["timestamp"], 0.0)
@@ -113,7 +132,7 @@ class TestPcapConverter(unittest.TestCase):
         
         # Test with relative_time=False
         converter.relative_time = False
-        non_adjusted = converter._adjust_timestamps(packets_info)
+        non_adjusted = converter._adjust_timestamps(original_packets)
         
         # These should remain unchanged
         self.assertEqual(non_adjusted[0]["timestamp"], 10.0)
