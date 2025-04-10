@@ -167,12 +167,12 @@ class TestSCTPHandler(unittest.TestCase):
         """Set up the test case."""
         self.handler = SCTPHandler()
         
-    @patch('pcap2packetdrill.protocols.SCTP')
-    def test_extract_packet_info_with_mock(self, mock_sctp):
+    def test_extract_packet_info_with_mock(self):
         """Test extracting information from a mock SCTP packet."""
         # Create a mock SCTP packet
         mock_packet = Mock()
-        mock_packet.__contains__ = lambda x: x in [IP, SCTP]
+        # Fix the __contains__ implementation to handle class comparison correctly
+        mock_packet.__contains__ = Mock(side_effect=lambda cls: cls in [IP, SCTP])
         
         mock_ip = Mock()
         mock_ip.src = "192.168.1.1"
@@ -186,10 +186,9 @@ class TestSCTPHandler(unittest.TestCase):
             {"type": 1, "init_tag": 123456}  # INIT chunk
         ]
         
-        mock_packet.__getitem__ = lambda self, protocol: {
-            IP: mock_ip,
-            SCTP: mock_sctp_layer
-        }[protocol]
+        # Define the __getitem** method to return the appropriate layer
+        mock_packet.__getitem__ = Mock(side_effect=lambda cls: 
+            mock_ip if cls == IP else mock_sctp_layer if cls == SCTP else None)
         
         mock_packet.time = 1.0
         
