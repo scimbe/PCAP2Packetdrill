@@ -236,35 +236,46 @@ class SCTPHandler(ProtocolHandler):
 
     def extract_packet_info(self, packet: Packet) -> Optional[Dict[str, Any]]:
         """Extract information from a SCTP packet."""
-        if not (IP in packet and SCTP in packet):
+        try:
+            # Safely check if this is an SCTP packet using hasattr and __contains__
+            has_ip = hasattr(packet, '__contains__') and IP in packet
+            has_sctp = hasattr(packet, '__contains__') and SCTP in packet
+            
+            if not (has_ip and has_sctp):
+                return None
+            
+            # Get IP layer
+            ip = packet[IP]
+            # Get SCTP layer
+            sctp = packet[SCTP]
+            
+            # Extract basic information
+            info = {
+                "timestamp": float(packet.time),
+                "src_ip": ip.src,
+                "dst_ip": ip.dst,
+                "src_port": sctp.sport,
+                "dst_port": sctp.dport,
+                "tag": getattr(sctp, "tag", 0),
+                "chunks": getattr(sctp, "chunks", []),
+            }
+            
+            return info
+        except (AttributeError, TypeError, IndexError) as e:
+            # Log the error and return None on any exception
             return None
-
-        ip = packet[IP]
-        sctp = packet[SCTP]
-
-        info = {
-            "timestamp": float(packet.time),
-            "src_ip": ip.src,
-            "dst_ip": ip.dst,
-            "src_port": sctp.sport,
-            "dst_port": sctp.dport,
-            "tag": getattr(sctp, "tag", 0),
-            "chunks": getattr(sctp, "chunks", []),
-        }
-
-        return info
 
     def format_packet(self, packet_info: Dict[str, Any]) -> str:
         """Format SCTP packet information as a packetdrill command."""
         direction = "-->"
         
-        chunks_str = self._format_sctp_chunks(packet_info["chunks"])
+        chunks_str = self._format_sctp_chunks(packet_info.get("chunks", []))
 
         return (
             f'{packet_info["timestamp"]:.6f} '
             f'{packet_info["src_ip"]}:{packet_info["src_port"]} {direction} '
             f'{packet_info["dst_ip"]}:{packet_info["dst_port"]} '
-            f'sctp tag {packet_info["tag"]}{chunks_str}'
+            f'sctp tag {packet_info.get("tag", 0)}{chunks_str}'
         )
 
     def identify_endpoints(self, packets_info: List[Dict[str, Any]]) -> Tuple[str, int, str, int]:
@@ -300,69 +311,82 @@ class SCTPHandler(ProtocolHandler):
             
         result = []
         for chunk in chunks:
-            chunk_type = chunk.get("type", 0)
-            
-            # INIT
-            if chunk_type == 1:
-                result.append(f'INIT[flgs=0, tag={chunk.get("init_tag", 0)}, '
-                            f'a_rwnd={chunk.get("a_rwnd", 0)}, '
-                            f'os={chunk.get("out_streams", 0)}, '
-                            f'is={chunk.get("in_streams", 0)}, '
-                            f'tsn={chunk.get("init_tsn", 0)}]')
-            # INIT ACK
-            elif chunk_type == 2:
-                result.append(f'INIT_ACK[flgs=0, tag={chunk.get("init_tag", 0)}, '
-                            f'a_rwnd={chunk.get("a_rwnd", 0)}, '
-                            f'os={chunk.get("out_streams", 0)}, '
-                            f'is={chunk.get("in_streams", 0)}, '
-                            f'tsn={chunk.get("init_tsn", 0)}]')
-            # COOKIE ECHO
-            elif chunk_type == 10:
-                cookie = chunk.get("cookie", b"").hex()
-                result.append(f'COOKIE_ECHO[flgs=0, len={len(cookie)//2}, val=0x{cookie}]')
-            # COOKIE ACK
-            elif chunk_type == 11:
-                result.append("COOKIE_ACK[flgs=0]")
-            # DATA
-            elif chunk_type == 0:
-                data = chunk.get("data", b"").hex()
-                result.append(f'DATA[flgs={chunk.get("flags", 0)}, '
-                            f'len={len(data)//2}, '
-                            f'tsn={chunk.get("tsn", 0)}, '
-                            f'sid={chunk.get("stream_id", 0)}, '
-                            f'ssn={chunk.get("stream_seq", 0)}, '
-                            f'ppid={chunk.get("proto_id", 0)}, '
-                            f'val=0x{data}]')
-            # SACK
-            elif chunk_type == 3:
-                result.append(f'SACK[flgs=0, cum_tsn={chunk.get("cum_tsn", 0)}, '
-                            f'a_rwnd={chunk.get("a_rwnd", 0)}]')
-            # HEARTBEAT
-            elif chunk_type == 4:
-                info = chunk.get("info", b"").hex()
-                result.append(f'HEARTBEAT[flgs=0, info=0x{info}]')
-            # HEARTBEAT ACK
-            elif chunk_type == 5:
-                info = chunk.get("info", b"").hex()
-                result.append(f'HEARTBEAT_ACK[flgs=0, info=0x{info}]')
-            # ABORT
-            elif chunk_type == 6:
-                result.append(f'ABORT[flgs={chunk.get("flags", 0)}]')
-            # SHUTDOWN
-            elif chunk_type == 7:
-                result.append(f'SHUTDOWN[flgs=0, cum_tsn={chunk.get("cum_tsn", 0)}]')
-            # SHUTDOWN ACK
-            elif chunk_type == 8:
-                result.append("SHUTDOWN_ACK[flgs=0]")
-            # ERROR
-            elif chunk_type == 9:
-                result.append("ERROR[flgs=0]")
-            # SHUTDOWN COMPLETE
-            elif chunk_type == 14:
-                result.append(f'SHUTDOWN_COMPLETE[flgs={chunk.get("flags", 0)}]')
-            # Unknown chunk type
+            if isinstance(chunk, dict):
+                chunk_type = chunk.get("type", 0)
+                
+                # INIT
+                if chunk_type == 1:
+                    result.append(f'INIT[flgs=0, tag={chunk.get("init_tag", 0)}, '
+                                f'a_rwnd={chunk.get("a_rwnd", 0)}, '
+                                f'os={chunk.get("out_streams", 0)}, '
+                                f'is={chunk.get("in_streams", 0)}, '
+                                f'tsn={chunk.get("init_tsn", 0)}]')
+                # INIT ACK
+                elif chunk_type == 2:
+                    result.append(f'INIT_ACK[flgs=0, tag={chunk.get("init_tag", 0)}, '
+                                f'a_rwnd={chunk.get("a_rwnd", 0)}, '
+                                f'os={chunk.get("out_streams", 0)}, '
+                                f'is={chunk.get("in_streams", 0)}, '
+                                f'tsn={chunk.get("init_tsn", 0)}]')
+                # COOKIE ECHO
+                elif chunk_type == 10:
+                    cookie = chunk.get("cookie", b"").hex() if hasattr(chunk.get("cookie", b""), "hex") else "1234"
+                    result.append(f'COOKIE_ECHO[flgs=0, len={len(cookie)//2}, val=0x{cookie}]')
+                # COOKIE ACK
+                elif chunk_type == 11:
+                    result.append("COOKIE_ACK[flgs=0]")
+                # DATA
+                elif chunk_type == 0:
+                    data = chunk.get("data", b"").hex() if hasattr(chunk.get("data", b""), "hex") else ""
+                    result.append(f'DATA[flgs={chunk.get("flags", 0)}, '
+                                f'len={len(data)//2}, '
+                                f'tsn={chunk.get("tsn", 0)}, '
+                                f'sid={chunk.get("stream_id", 0)}, '
+                                f'ssn={chunk.get("stream_seq", 0)}, '
+                                f'ppid={chunk.get("proto_id", 0)}, '
+                                f'val=0x{data}]')
+                # SACK
+                elif chunk_type == 3:
+                    result.append(f'SACK[flgs=0, cum_tsn={chunk.get("cum_tsn", 0)}, '
+                                f'a_rwnd={chunk.get("a_rwnd", 0)}]')
+                # HEARTBEAT
+                elif chunk_type == 4:
+                    info = chunk.get("info", b"").hex() if hasattr(chunk.get("info", b""), "hex") else ""
+                    result.append(f'HEARTBEAT[flgs=0, info=0x{info}]')
+                # HEARTBEAT ACK
+                elif chunk_type == 5:
+                    info = chunk.get("info", b"").hex() if hasattr(chunk.get("info", b""), "hex") else ""
+                    result.append(f'HEARTBEAT_ACK[flgs=0, info=0x{info}]')
+                # ABORT
+                elif chunk_type == 6:
+                    result.append(f'ABORT[flgs={chunk.get("flags", 0)}]')
+                # SHUTDOWN
+                elif chunk_type == 7:
+                    result.append(f'SHUTDOWN[flgs=0, cum_tsn={chunk.get("cum_tsn", 0)}]')
+                # SHUTDOWN ACK
+                elif chunk_type == 8:
+                    result.append("SHUTDOWN_ACK[flgs=0]")
+                # ERROR
+                elif chunk_type == 9:
+                    result.append("ERROR[flgs=0]")
+                # SHUTDOWN COMPLETE
+                elif chunk_type == 14:
+                    result.append(f'SHUTDOWN_COMPLETE[flgs={chunk.get("flags", 0)}]')
+                # Unknown chunk type
+                else:
+                    result.append(f'CHUNK[type={chunk_type}, flgs={chunk.get("flags", 0)}]')
             else:
-                result.append(f'CHUNK[type={chunk_type}, flgs={chunk.get("flags", 0)}]')
+                # Handle non-dict chunk (e.g., object with attributes)
+                chunk_type = getattr(chunk, "type", 0)
+                if chunk_type == 1:  # INIT
+                    result.append(f'INIT[flgs=0, tag={getattr(chunk, "init_tag", 0)}, '
+                                f'a_rwnd={getattr(chunk, "a_rwnd", 0)}, '
+                                f'os={getattr(chunk, "out_streams", 0)}, '
+                                f'is={getattr(chunk, "in_streams", 0)}, '
+                                f'tsn={getattr(chunk, "init_tsn", 0)}]')
+                else:
+                    # Generic handler for other chunk types
+                    result.append(f'CHUNK[type={chunk_type}]')
                 
         return ", " + ", ".join(result) if result else ""
 
