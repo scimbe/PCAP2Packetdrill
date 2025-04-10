@@ -710,6 +710,13 @@ class PcapConverter:
             
         self.protocol_handler = SUPPORTED_PROTOCOLS[self.protocol_name.lower()]
         
+        # Set client and server information in the protocol handler if it's a TCP handler
+        if hasattr(self.protocol_handler, 'client_ip'):
+            self.protocol_handler.client_ip = self.client_ip
+            self.protocol_handler.client_port = self.client_port
+            self.protocol_handler.server_ip = self.server_ip
+            self.protocol_handler.server_port = self.server_port
+        
         # Extract and filter packet information
         packets_info = self._filter_packets(packets)
         
@@ -723,6 +730,13 @@ class PcapConverter:
             
             self.logger.info(f"Identified client: {self.client_ip}:{self.client_port}")
             self.logger.info(f"Identified server: {self.server_ip}:{self.server_port}")
+            
+            # Update protocol handler with identified endpoints
+            if hasattr(self.protocol_handler, 'client_ip'):
+                self.protocol_handler.client_ip = self.client_ip
+                self.protocol_handler.client_port = self.client_port
+                self.protocol_handler.server_ip = self.server_ip
+                self.protocol_handler.server_port = self.server_port
         
         # Do basic flow analysis to determine pre/post conditions
         flow_info = {

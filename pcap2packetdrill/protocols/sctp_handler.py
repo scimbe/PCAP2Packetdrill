@@ -26,6 +26,14 @@ from pcap2packetdrill.protocols.base import ProtocolHandler
 
 class SCTPHandler(ProtocolHandler):
     """Handler for SCTP protocol packets."""
+    
+    def __init__(self):
+        """Initialize the SCTP handler."""
+        super().__init__()
+        self.client_ip = None
+        self.client_port = None
+        self.server_ip = None
+        self.server_port = None
 
     def extract_packet_info(self, packet: Packet) -> Optional[Dict[str, Any]]:
         """Extract information from a mock or real SCTP packet."""
@@ -106,15 +114,19 @@ class SCTPHandler(ProtocolHandler):
 
     def format_packet(self, packet_info: Dict[str, Any]) -> str:
         """Format SCTP packet information as a packetdrill command."""
-        direction = "-->"
+        # Determine packet direction (> for outgoing, < for incoming)
+        if packet_info["src_ip"] == self.client_ip and packet_info["src_port"] == self.client_port:
+            direction = ">"  # Outgoing (client to server)
+        else:
+            direction = "<"  # Incoming (server to client)
         
+        # Format SCTP chunks
         chunks_str = self._format_sctp_chunks(packet_info.get("chunks", []))
-
+        
+        # Format the packet information as a packetdrill command
         return (
-            f'{packet_info["timestamp"]:.6f} '
-            f'{packet_info["src_ip"]}:{packet_info["src_port"]} {direction} '
-            f'{packet_info["dst_ip"]}:{packet_info["dst_port"]} '
-            f'sctp tag {packet_info.get("tag", 0)}{chunks_str}'
+            f'+{packet_info["timestamp"]:.6f} {direction} sctp(tag={packet_info.get("tag", 0)}'
+            f'{chunks_str})'
         )
 
     def identify_endpoints(self, packets_info: List[Dict[str, Any]]) -> Tuple[str, int, str, int]:

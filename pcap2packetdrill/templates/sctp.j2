@@ -15,11 +15,11 @@
 
 // Socket options
 0 setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
-0 setsockopt(3, IPPROTO_SCTP, SCTP_NODELAY, [1], 4) = 0
+// 0 setsockopt(3, IPPROTO_SCTP, SCTP_NODELAY, [1], 4) = 0  // Uncomment if needed
 
 // Bind to client address
 0 bind(3, ..., ...) = 0
-0 connect(3, {sa_family=AF_INET, sin_port=htons({{ server_port }}), sin_addr={{server_ip}}}, ...) = 0
+0 connect(3, ..., ...) = 0
 
 // ===== Packet Trace =====
 // This section contains the actual network traffic captured in the PCAP

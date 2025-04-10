@@ -14,6 +14,14 @@ from pcap2packetdrill.protocols.base import ProtocolHandler
 
 class UDPHandler(ProtocolHandler):
     """Handler for UDP protocol packets."""
+    
+    def __init__(self):
+        """Initialize the UDP handler."""
+        super().__init__()
+        self.client_ip = None
+        self.client_port = None
+        self.server_ip = None
+        self.server_port = None
 
     def extract_packet_info(self, packet: Packet) -> Optional[Dict[str, Any]]:
         """Extract information from a UDP packet."""
@@ -36,18 +44,25 @@ class UDPHandler(ProtocolHandler):
 
     def format_packet(self, packet_info: Dict[str, Any]) -> str:
         """Format UDP packet information as a packetdrill command."""
-        direction = "-->"
+        # Determine packet direction (> for outgoing, < for incoming)
+        if packet_info["src_ip"] == self.client_ip and packet_info["src_port"] == self.client_port:
+            direction = ">"  # Outgoing (client to server)
+        else:
+            direction = "<"  # Incoming (server to client)
         
-        payload_str = ""
+        # Format payload
+        payload_len = len(packet_info["payload"]) if packet_info["payload"] else 0
+        
+        # Format payload content if needed
+        payload_content = ""
         if packet_info["payload"]:
+            # Format as hex or appropriate representation as needed by packetdrill
             hex_payload = packet_info["payload"].hex()
-            payload_str = f', {"0x{hex_payload}"}'
-
+            payload_content = f' data {hex_payload}'
+        
+        # Format the packet information as a packetdrill command
         return (
-            f'{packet_info["timestamp"]:.6f} '
-            f'{packet_info["src_ip"]}:{packet_info["src_port"]} {direction} '
-            f'{packet_info["dst_ip"]}:{packet_info["dst_port"]} '
-            f'udp{payload_str}'
+            f'+{packet_info["timestamp"]:.6f} {direction} udp {payload_len}{payload_content}'
         )
 
     def identify_endpoints(self, packets_info: List[Dict[str, Any]]) -> Tuple[str, int, str, int]:

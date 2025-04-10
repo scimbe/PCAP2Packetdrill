@@ -14,6 +14,14 @@ from pcap2packetdrill.protocols.base import ProtocolHandler
 
 class TCPHandler(ProtocolHandler):
     """Handler for TCP protocol packets."""
+    
+    def __init__(self):
+        """Initialize the TCP handler."""
+        super().__init__()
+        self.client_ip = None
+        self.client_port = None
+        self.server_ip = None
+        self.server_port = None
 
     def extract_packet_info(self, packet: Packet) -> Optional[Dict[str, Any]]:
         """Extract information from a TCP packet."""
@@ -41,25 +49,40 @@ class TCPHandler(ProtocolHandler):
 
     def format_packet(self, packet_info: Dict[str, Any]) -> str:
         """Format TCP packet information as a packetdrill command."""
-        direction = "-->"
+        # Determine packet direction (> for outgoing, < for incoming)
+        # In the context of this converter, outgoing is from client to server
+        if packet_info["src_ip"] == self.client_ip and packet_info["src_port"] == self.client_port:
+            direction = ">"  # Outgoing (client to server)
+        else:
+            direction = "<"  # Incoming (server to client)
+        
+        # Format TCP flags
         flags_str = self._format_tcp_flags(packet_info["flags"])
         
+        # Format payload length
+        payload_len = len(packet_info["payload"]) if packet_info["payload"] else 0
+        
+        # Format TCP options
         options_str = ""
         if packet_info["options"]:
-            options_str = ", " + self._format_tcp_options(packet_info["options"])
-
-        payload_str = ""
-        if packet_info["payload"]:
-            hex_payload = packet_info["payload"].hex()
-            payload_str = f', {"0x{hex_payload}"}'
-
-        return (
-            f'{packet_info["timestamp"]:.6f} '
-            f'{packet_info["src_ip"]}:{packet_info["src_port"]} {direction} '
-            f'{packet_info["dst_ip"]}:{packet_info["dst_port"]} '
-            f'tcp {flags_str} seq {packet_info["seq"]} ack {packet_info["ack"]} '
-            f'win {packet_info["win"]}{options_str}{payload_str}'
-        )
+            options_str = f" <{self._format_tcp_options(packet_info['options'])}>"
+        
+        # Format the packet information as a packetdrill command
+        # Format: +time > flags seq:seq+payload_len(payload_len) [ack ack] win window <options>
+        cmd = f'+{packet_info["timestamp"]:.6f} {direction} {flags_str} '
+        cmd += f'{packet_info["seq"]}:{packet_info["seq"] + payload_len}({payload_len}) '
+        
+        # Add ACK if the ACK flag is set
+        if packet_info["flags"] & 0x10:  # ACK flag
+            cmd += f'ack {packet_info["ack"]} '
+        
+        cmd += f'win {packet_info["win"]}'
+        
+        # Add options if present
+        if options_str:
+            cmd += options_str
+        
+        return cmd
 
     def identify_endpoints(self, packets_info: List[Dict[str, Any]]) -> Tuple[str, int, str, int]:
         """Identify client and server endpoints from TCP packets."""
@@ -87,28 +110,49 @@ class TCPHandler(ProtocolHandler):
 
     @staticmethod
     def _format_tcp_flags(flags: int) -> str:
-        """Format TCP flags as a string."""
-        flag_map = {
-            0x01: "F",  # FIN
-            0x02: "S",  # SYN
-            0x04: "R",  # RST
-            0x08: "P",  # PSH
-            0x10: "A",  # ACK
-            0x20: "U",  # URG
-            0x40: "E",  # ECE
-            0x80: "C",  # CWR
-        }
+        """
+        Format TCP flags as a string in packetdrill format.
         
-        result = []
-        for bit, char in flag_map.items():
-            if flags & bit:
-                result.append(char)
+        In packetdrill format, flags are represented as single letters:
+        - F (FIN)
+        - S (SYN)
+        - R (RST)
+        - P (PUSH)
+        - A (ACK)
+        - U (URG)
+        - E (ECE)
+        - C (CWR)
+        """
+        result = ""
+        
+        # Check each flag bit
+        if flags & 0x02:  # SYN
+            result += "S"
+        if flags & 0x10:  # ACK
+            result += "A"
+        if flags & 0x01:  # FIN
+            result += "F"
+        if flags & 0x08:  # PSH
+            result += "P"
+        if flags & 0x04:  # RST
+            result += "R"
+        if flags & 0x20:  # URG
+            result += "U"
+        if flags & 0x40:  # ECE
+            result += "E"
+        if flags & 0x80:  # CWR
+            result += "C"
                 
-        return "".join(result)
+        return result
 
     @staticmethod
     def _format_tcp_options(options: List[Tuple[str, Any]]) -> str:
-        """Format TCP options as a string."""
+        """
+        Format TCP options as a string for packetdrill.
+        
+        The format should be compatible with packetdrill's expected format:
+        <mss 1460,nop,nop,sackOK,nop,wscale 7,nop,nop,TS val 123456 ecr 0>
+        """
         result = []
         for opt_name, opt_val in options:
             if opt_name == "MSS":
@@ -116,9 +160,13 @@ class TCPHandler(ProtocolHandler):
             elif opt_name == "SAckOK":
                 result.append("sackOK")
             elif opt_name == "Timestamp":
-                result.append(f"ts val {opt_val[0]} ecr {opt_val[1]}")
+                result.append(f"TS val {opt_val[0]} ecr {opt_val[1]}")
             elif opt_name == "WScale":
                 result.append(f"wscale {opt_val}")
+            elif opt_name == "NOP":
+                result.append("nop")
+            elif opt_name == "EOL":
+                result.append("eol")
             # Add more options as needed
                 
-        return " ".join(result)
+        return ",".join(result)
