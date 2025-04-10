@@ -10,6 +10,8 @@ from unittest.mock import Mock
 from scapy.all import Packet
 from scapy.layers.inet import IP
 
+import logging
+
 # Try to import SCTP, but provide a fallback if not available
 try:
     from scapy.contrib.sctp import SCTP
