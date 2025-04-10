@@ -441,17 +441,25 @@ class PcapConverter:
         Returns:
             List of packet information dictionaries with adjusted timestamps
         """
-        if not packets_info or not self.relative_time:
+        if not packets_info:
             return packets_info
             
-        # Get the timestamp of the first packet
-        initial_timestamp = packets_info[0]["timestamp"]
-        
-        # Adjust all timestamps
-        for packet_info in packets_info:
-            packet_info["timestamp"] -= initial_timestamp
+        # Only adjust timestamps if relative_time is True
+        if self.relative_time:
+            # Create a copy to avoid modifying the original
+            adjusted_packets = packets_info.copy()
             
-        return packets_info
+            # Get the timestamp of the first packet
+            initial_timestamp = adjusted_packets[0]["timestamp"]
+            
+            # Adjust all timestamps
+            for packet_info in adjusted_packets:
+                packet_info["timestamp"] -= initial_timestamp
+                
+            return adjusted_packets
+        else:
+            # Return original timestamps
+            return packets_info
     
     def _load_template(self) -> jinja2.Template:
         """
