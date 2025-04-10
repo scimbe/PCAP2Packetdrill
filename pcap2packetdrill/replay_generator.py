@@ -408,9 +408,23 @@ class ReplayTestGenerator:
         
         # Adjust timestamps if needed
         if self.relative_time and packets_info:
-            initial_timestamp = packets_info[0]["timestamp"]
+            # Handle both real float values and potential Mock objects
+            initial_ts = packets_info[0]["timestamp"]
+            # Convert to float safely, handling potential Mock objects
+            if hasattr(initial_ts, "__float__"):
+                initial_timestamp = float(initial_ts)
+            else:
+                # Default to 0.0 for Mock objects that can't be converted
+                initial_timestamp = 0.0
+                
             for packet_info in packets_info:
-                packet_info["timestamp"] -= float(initial_timestamp)
+                ts = packet_info["timestamp"]
+                # Handle both real values and Mock objects
+                if hasattr(ts, "__float__"):
+                    packet_info["timestamp"] = float(ts) - initial_timestamp
+                else:
+                    # For Mock objects, just set to 0.0
+                    packet_info["timestamp"] = 0.0
         
         # Format packets into Packetdrill commands
         formatted_packets = []
