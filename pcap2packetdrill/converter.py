@@ -11,16 +11,7 @@ from collections import defaultdict
 
 import jinja2
 from scapy.all import rdpcap, Packet
-from scapy.layers.inet import IP, TCP, UDP
-
-# Try to import SCTP, but provide a fallback if not available
-try:
-    from scapy.contrib.sctp import SCTP
-except ImportError:
-    # Create a dummy SCTP class for type checking
-    class SCTP:
-        """Dummy SCTP class for when scapy.contrib.sctp is not available."""
-        pass
+from scapy.layers.inet import IP, TCP
 
 from pcap2packetdrill.protocols import SUPPORTED_PROTOCOLS, ProtocolHandler
 
@@ -45,7 +36,7 @@ class PcapConverter:
 
         Args:
             pcap_file: Path to the PCAP file
-            protocol: Protocol to filter (tcp, udp, sctp) or None for auto-detection
+            protocol: Protocol to filter (tcp) or None for auto-detection
             client_ip: Client IP address to filter or None for auto-detection
             server_ip: Server IP address to filter or None for auto-detection
             client_port: Client port to filter or None for auto-detection
@@ -127,38 +118,6 @@ class PcapConverter:
                     flow_stats["byte_count"] += len(packet)
                     flow_stats["start_time"] = min(flow_stats["start_time"], float(packet.time))
                     flow_stats["end_time"] = max(flow_stats["end_time"], float(packet.time))
-                    
-                elif UDP in packet:
-                    analysis["protocols"].add("udp")
-                    src_port = packet[UDP].sport
-                    dst_port = packet[UDP].dport
-                    analysis["ports"]["udp"].add(src_port)
-                    analysis["ports"]["udp"].add(dst_port)
-                    
-                    flow_id = self._get_flow_id("udp", src_ip, dst_ip, src_port, dst_port)
-                    analysis["flows"][flow_id].append(packet)
-                    
-                    flow_stats = analysis["flow_statistics"][flow_id]
-                    flow_stats["packet_count"] += 1
-                    flow_stats["byte_count"] += len(packet)
-                    flow_stats["start_time"] = min(flow_stats["start_time"], float(packet.time))
-                    flow_stats["end_time"] = max(flow_stats["end_time"], float(packet.time))
-                    
-                elif SCTP in packet:
-                    analysis["protocols"].add("sctp")
-                    src_port = packet[SCTP].sport
-                    dst_port = packet[SCTP].dport
-                    analysis["ports"]["sctp"].add(src_port)
-                    analysis["ports"]["sctp"].add(dst_port)
-                    
-                    flow_id = self._get_flow_id("sctp", src_ip, dst_ip, src_port, dst_port)
-                    analysis["flows"][flow_id].append(packet)
-                    
-                    flow_stats = analysis["flow_statistics"][flow_id]
-                    flow_stats["packet_count"] += 1
-                    flow_stats["byte_count"] += len(packet)
-                    flow_stats["start_time"] = min(flow_stats["start_time"], float(packet.time))
-                    flow_stats["end_time"] = max(flow_stats["end_time"], float(packet.time))
         
         # Second pass: Identify significant flows and connection patterns
         significant_flows = {}
@@ -179,35 +138,6 @@ class PcapConverter:
                         "byte_count": analysis["flow_statistics"][flow_id]["byte_count"],
                         "duration": analysis["flow_statistics"][flow_id]["end_time"] - analysis["flow_statistics"][flow_id]["start_time"],
                         "complete": True
-                    }
-            elif protocol == "udp":
-                # For UDP, check if there's bidirectional communication
-                has_response = self._analyze_udp_flow(packets)
-                significant_flows[flow_id] = {
-                    "protocol": protocol,
-                    "src_ip": src_ip,
-                    "dst_ip": dst_ip,
-                    "src_port": src_port,
-                    "dst_port": dst_port,
-                    "packet_count": analysis["flow_statistics"][flow_id]["packet_count"],
-                    "byte_count": analysis["flow_statistics"][flow_id]["byte_count"],
-                    "duration": analysis["flow_statistics"][flow_id]["end_time"] - analysis["flow_statistics"][flow_id]["start_time"],
-                    "bidirectional": has_response
-                }
-            elif protocol == "sctp":
-                # For SCTP, check for association setup
-                has_association = self._analyze_sctp_flow(packets)
-                if has_association:
-                    significant_flows[flow_id] = {
-                        "protocol": protocol,
-                        "src_ip": src_ip,
-                        "dst_ip": dst_ip,
-                        "src_port": src_port,
-                        "dst_port": dst_port,
-                        "packet_count": analysis["flow_statistics"][flow_id]["packet_count"],
-                        "byte_count": analysis["flow_statistics"][flow_id]["byte_count"],
-                        "duration": analysis["flow_statistics"][flow_id]["end_time"] - analysis["flow_statistics"][flow_id]["start_time"],
-                        "has_association": True
                     }
         
         analysis["significant_flows"] = significant_flows
@@ -288,65 +218,6 @@ class PcapConverter:
         # Consider a connection complete if it has at least SYN and SYN-ACK
         return has_syn and has_syn_ack
     
-    def _analyze_udp_flow(self, packets: List[Packet]) -> bool:
-        """
-        Analyze a UDP flow to determine if it has bidirectional communication.
-        
-        Args:
-            packets: List of packets in the flow
-            
-        Returns:
-            True if the flow contains bidirectional UDP communication
-        """
-        # Get the first packet's endpoints
-        if not packets or not (IP in packets[0] and UDP in packets[0]):
-            return False
-            
-        first_src_ip = packets[0][IP].src
-        first_dst_ip = packets[0][IP].dst
-        
-        # Check if there are packets in the reverse direction
-        for packet in packets[1:]:
-            if IP in packet and UDP in packet:
-                if packet[IP].src == first_dst_ip and packet[IP].dst == first_src_ip:
-                    return True
-        
-        return False
-    
-    def _analyze_sctp_flow(self, packets: List[Packet]) -> bool:
-        """
-        Analyze an SCTP flow to determine if it contains an association setup.
-        
-        Args:
-            packets: List of packets in the flow
-            
-        Returns:
-            True if the flow contains an SCTP association setup
-        """
-        has_init = False
-        has_init_ack = False
-        has_cookie_echo = False
-        has_cookie_ack = False
-        
-        for packet in packets:
-            if SCTP in packet:
-                # Check SCTP chunks
-                if hasattr(packet[SCTP], "chunks"):
-                    for chunk in packet[SCTP].chunks:
-                        chunk_type = getattr(chunk, "type", None)
-                        
-                        if chunk_type == 1:  # INIT
-                            has_init = True
-                        elif chunk_type == 2:  # INIT_ACK
-                            has_init_ack = True
-                        elif chunk_type == 10:  # COOKIE_ECHO
-                            has_cookie_echo = True
-                        elif chunk_type == 11:  # COOKIE_ACK
-                            has_cookie_ack = True
-        
-        # Consider an association setup if it has at least INIT and INIT_ACK
-        return has_init and has_init_ack
-    
     def _auto_detect_protocol(self, packets: List[Packet]) -> str:
         """
         Auto-detect the protocol from the packets.
@@ -361,31 +232,19 @@ class PcapConverter:
             ValueError: If no supported protocol is detected
         """
         # Count protocol occurrences
-        protocol_counts = {"tcp": 0, "udp": 0, "sctp": 0}
+        protocol_counts = {"tcp": 0}
         
         for packet in packets:
             if IP in packet:
                 if TCP in packet:
                     protocol_counts["tcp"] += 1
-                elif UDP in packet:
-                    protocol_counts["udp"] += 1
-                elif SCTP in packet:
-                    protocol_counts["sctp"] += 1
         
-        # Determine the most frequent protocol
-        max_count = 0
-        detected_protocol = None
-        
-        for protocol, count in protocol_counts.items():
-            if count > max_count:
-                max_count = count
-                detected_protocol = protocol
-        
-        if detected_protocol is None:
+        # Check if TCP is present
+        if protocol_counts["tcp"] > 0:
+            self.logger.info(f"Auto-detected protocol: tcp")
+            return "tcp"
+        else:
             raise ValueError("No supported protocol detected in the PCAP file")
-        
-        self.logger.info(f"Auto-detected protocol: {detected_protocol}")
-        return detected_protocol
     
     def _filter_packets(self, packets: List[Packet]) -> List[Dict[str, Any]]:
         """
@@ -533,45 +392,6 @@ class PcapConverter:
                     "Close socket"
                 ]
                 
-        elif protocol == "udp":
-            test_case["preconditions"] = [
-                "Create a UDP socket",
-                "Set appropriate socket options",
-                "Bind to client address"
-            ]
-            
-            # Generate postconditions based on whether it's bidirectional
-            if flow_info.get("bidirectional", False):
-                test_case["postconditions"] = [
-                    "Verify expected responses were received",
-                    "Close socket"
-                ]
-            else:
-                test_case["postconditions"] = [
-                    "Handle lack of response appropriately",
-                    "Close socket"
-                ]
-                
-        elif protocol == "sctp":
-            test_case["preconditions"] = [
-                "Create an SCTP socket",
-                "Set appropriate socket options",
-                "Bind to client address",
-                "Connect to server"
-            ]
-            
-            # Generate postconditions based on association status
-            if flow_info.get("has_association", False):
-                test_case["postconditions"] = [
-                    "Ensure association was established successfully",
-                    "Close association gracefully"
-                ]
-            else:
-                test_case["postconditions"] = [
-                    "Handle association errors appropriately",
-                    "Close socket"
-                ]
-        
         return test_case
     
     def convert(self) -> Dict[str, str]:
@@ -616,10 +436,6 @@ class PcapConverter:
                 score = flow_info["packet_count"] * 10
                 
                 if protocol == "tcp" and flow_info.get("complete", False):
-                    score += 100
-                if protocol == "udp" and flow_info.get("bidirectional", False):
-                    score += 100
-                if protocol == "sctp" and flow_info.get("has_association", False):
                     score += 100
                     
                 if score > best_flow_score:
@@ -748,10 +564,6 @@ class PcapConverter:
         
         if self.protocol_name == "tcp":
             flow_info["complete"] = self._analyze_tcp_flow(packets)
-        elif self.protocol_name == "udp":
-            flow_info["bidirectional"] = self._analyze_udp_flow(packets)
-        elif self.protocol_name == "sctp":
-            flow_info["has_association"] = self._analyze_sctp_flow(packets)
         
         # Generate test case with pre/post conditions
         test_case = self._generate_test_case(self.protocol_name, flow_info, packets_info)
