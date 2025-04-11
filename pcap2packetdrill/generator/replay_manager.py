@@ -13,15 +13,14 @@ from scapy.all import Packet, rdpcap
 
 from pcap2packetdrill.flow import FlowAnalyzer
 from pcap2packetdrill.generator.tcp_generator import TCPReplayGenerator
-from pcap2packetdrill.generator.sctp_generator import SCTPReplayGenerator
 
 
 class ReplayManager:
     """
     Manager for generating replay test scripts from PCAP files.
     
-    This class coordinates the flow analysis and script generation for multiple
-    protocols to create replay test scripts.
+    This class coordinates the flow analysis and script generation for TCP
+    protocol to create replay test scripts.
     """
 
     def __init__(
@@ -80,16 +79,15 @@ class ReplayManager:
         # Initialize analyzers and generators
         self.flow_analyzer = FlowAnalyzer(debug=debug)
         self.tcp_generator = TCPReplayGenerator(self.template_dir, relative_time, debug)
-        self.sctp_generator = SCTPReplayGenerator(self.template_dir, relative_time, debug)
     
     def generate_replay_tests(self) -> Dict[str, str]:
         """
-        Generate replay test scripts for all complete connection cycles in the PCAP.
+        Generate replay test scripts for all complete TCP connection cycles in the PCAP.
         
         This method:
         1. Reads the PCAP file
         2. Identifies all protocol flows
-        3. Finds complete TCP and SCTP connection cycles
+        3. Finds complete TCP connection cycles
         4. Generates test scripts for each cycle
         5. Saves the scripts to files
         
@@ -130,14 +128,6 @@ class ReplayManager:
             self.logger.warning(f"Error identifying TCP cycles: {e}")
             tcp_cycles = {}
         
-        # Find complete SCTP association cycles
-        try:
-            sctp_cycles = self.flow_analyzer.identify_sctp_association_cycles(flows)
-            self.logger.info(f"Found {len(sctp_cycles)} flows with SCTP association cycles")
-        except Exception as e:
-            self.logger.warning(f"Error identifying SCTP cycles: {e}")
-            sctp_cycles = {}
-        
         # Generate test scripts
         test_scripts = {}
         
@@ -159,25 +149,6 @@ class ReplayManager:
                     self.logger.debug(f"Generated TCP replay test: {test_name}")
             except Exception as e:
                 self.logger.warning(f"Error generating TCP test scripts for flow {flow_id}: {e}")
-        
-        # Process SCTP association cycles
-        for flow_id, cycles in sctp_cycles.items():
-            try:
-                protocol, src_ip, dst_ip, src_port, dst_port = self.flow_analyzer.parse_flow_id(flow_id)
-                
-                for i, cycle in enumerate(cycles):
-                    # Generate a descriptive test name with sanitized IP addresses
-                    test_name = f"sctp_{src_ip.replace('.', '_')}_{src_port}_to_{dst_ip.replace('.', '_')}_{dst_port}_cycle_{i+1}"
-                    
-                    # Convert the cycle packets to a test script
-                    script = self.sctp_generator.generate_replay_script(
-                        cycle, src_ip, src_port, dst_ip, dst_port
-                    )
-                    
-                    test_scripts[test_name] = script
-                    self.logger.debug(f"Generated SCTP replay test: {test_name}")
-            except Exception as e:
-                self.logger.warning(f"Error generating SCTP test scripts for flow {flow_id}: {e}")
         
         self.logger.info(f"Generated {len(test_scripts)} replay test scripts")
         
