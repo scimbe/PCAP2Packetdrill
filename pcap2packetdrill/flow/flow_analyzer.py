@@ -13,7 +13,6 @@ from scapy.all import Packet
 
 from pcap2packetdrill.flow.flow_identifier import FlowIdentifier
 from pcap2packetdrill.flow.tcp_analyzer import TCPAnalyzer
-from pcap2packetdrill.flow.sctp_analyzer import SCTPAnalyzer
 
 
 class FlowAnalyzer:
@@ -39,14 +38,13 @@ class FlowAnalyzer:
         # Initialize sub-components
         self.flow_identifier = FlowIdentifier(debug=debug)
         self.tcp_analyzer = TCPAnalyzer(debug=debug)
-        self.sctp_analyzer = SCTPAnalyzer(debug=debug)
     
     def get_flow_id(self, protocol: str, src_ip: str, dst_ip: str, src_port: int, dst_port: int) -> str:
         """
         Generate a consistent flow ID regardless of packet direction.
         
         Args:
-            protocol: Protocol name (tcp, udp, sctp)
+            protocol: Protocol name (tcp)
             src_ip: Source IP address
             dst_ip: Destination IP address
             src_port: Source port
@@ -107,30 +105,3 @@ class FlowAnalyzer:
         
         self.logger.info(f"Identified {len(connection_cycles)} flows with complete TCP connection cycles")
         return connection_cycles
-    
-    def identify_sctp_association_cycles(self, flows: Dict[str, List[Packet]]) -> Dict[str, List[List[Packet]]]:
-        """
-        Identify complete SCTP association cycles in the flows.
-        
-        Args:
-            flows: Dictionary mapping flow IDs to lists of packets
-            
-        Returns:
-            Dictionary mapping flow IDs to lists of packet cycles
-        """
-        association_cycles = {}
-        
-        for flow_id, packets in flows.items():
-            protocol = flow_id.split(':', 1)[0]
-            
-            if protocol != 'sctp':
-                continue
-                
-            # Find association establishment and termination
-            cycles = self.sctp_analyzer.extract_sctp_association_cycles(packets)
-            
-            if cycles:
-                association_cycles[flow_id] = cycles
-        
-        self.logger.info(f"Identified {len(association_cycles)} flows with complete SCTP association cycles")
-        return association_cycles
